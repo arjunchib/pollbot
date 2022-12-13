@@ -1,0 +1,8 @@
+{
+  "imports": {
+    "disco": "https://raw.githubusercontent.com/arjunchib/disco/main/mod.ts",
+    "disco/jsx-runtime": "https://raw.githubusercontent.com/arjunchib/disco/main/jsx-runtime.ts",
+    "disco/jsx-dev-runtime": "https://raw.githubusercontent.com/arjunchib/disco/main/jsx-dev-runtime.ts",
+    "discord_api_types": "https://deno.land/x/discord_api_types@0.37.17/v10.ts"
+  }
+}
