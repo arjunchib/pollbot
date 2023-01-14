@@ -5,7 +5,7 @@ import {
   TextInputStyle,
   ButtonStyle,
   ComponentType,
-} from "discord_api_types";
+} from "discord-api-types/v10";
 import {
   Command,
   Interaction,
@@ -15,8 +15,9 @@ import {
   ChannelMessageWithSource,
   Button,
   UpdateMessage,
-} from "disco";
-import { Poll } from "../models/poll.ts";
+} from "@blurp/common";
+import { Poll, PollData } from "../models/poll.js";
+import { Env } from "../environment.js";
 
 export const command: Command = {
   name: "poll",
@@ -34,9 +35,8 @@ export const command: Command = {
 };
 
 const EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"];
-const polls = new Map<string, Poll>();
 
-function handleSlashCommand(interaction: Interaction) {
+async function handleSlashCommand(interaction: Interaction, env: Env) {
   if (
     interaction.payload.type !== InteractionType.ApplicationCommand ||
     interaction.payload.data.type !== ApplicationCommandType.ChatInput
@@ -79,7 +79,7 @@ function handleSlashCommand(interaction: Interaction) {
   );
 }
 
-function handleModalSubmit(interaction: Interaction) {
+async function handleModalSubmit(interaction: Interaction, env: Env) {
   if (interaction.payload.type !== InteractionType.ModalSubmit) return;
   const title = interaction.payload.data.components.find((row) =>
     row.components.some((input) => input.custom_id === "poll:title")
@@ -90,7 +90,6 @@ function handleModalSubmit(interaction: Interaction) {
     )
     .map((row) => row.components[0].value);
   const poll = new Poll();
-  polls.set(poll.id, poll);
   const buttons = options.map((opt, i) => (
     <Button
       emoji={{ name: EMOJIS[i] }}
@@ -111,25 +110,28 @@ function handleModalSubmit(interaction: Interaction) {
       {children}
     </ChannelMessageWithSource>
   );
+  await env.POLL.put(poll.id, JSON.stringify(poll), {
+    expirationTtl: 3600 * 24 * 7,
+  });
 }
 
-function handleButtonClick(interaction: Interaction) {
+async function handleButtonClick(interaction: Interaction, env: Env) {
   if (
     interaction.payload.type !== InteractionType.MessageComponent ||
     interaction.payload.data.component_type !== ComponentType.Button
   )
     return;
   const [_, pollId, indexStr] = interaction.payload.data.custom_id.split(":");
-  const poll = polls.get(pollId);
-  if (!poll) {
+  const pollData = await env.POLL.get<PollData>(pollId, { type: "json" });
+  if (!pollData) {
     let content = interaction.payload.message.content.split("\n")[0];
     content += "\n*Poll has ended. Voting is no longer allowed.*";
     return interaction.reply(<UpdateMessage content={content}></UpdateMessage>);
   }
+  const poll = new Poll(pollData);
   const index = parseInt(indexStr);
   const user = interaction.payload.member?.user || interaction.payload.user;
   if (user == null || index == null || index < 0 || index > 4) {
-    console.log(user, index);
     let content = interaction.payload.message.content.split("\n")[0];
     content += "\n*Something has gone wrong.*";
     return interaction.reply(<UpdateMessage content={content}></UpdateMessage>);
@@ -153,10 +155,13 @@ function handleButtonClick(interaction: Interaction) {
   interaction.reply(
     <UpdateMessage>{interaction.payload.message.components}</UpdateMessage>
   );
+  await env.POLL.put(poll.id, JSON.stringify(poll), {
+    expirationTtl: 3600 * 24 * 7,
+  });
 }
 
-export default function PollHandler(interaction: Interaction) {
-  handleSlashCommand(interaction);
-  handleModalSubmit(interaction);
-  handleButtonClick(interaction);
+export default async function PollHandler(interaction: Interaction, env: Env) {
+  await handleSlashCommand(interaction, env);
+  await handleModalSubmit(interaction, env);
+  await handleButtonClick(interaction, env);
 }
