@@ -5,3 +5,10 @@ compatibility_date = "2023-01-13"
 kv_namespaces = [
   { binding = "POLL", id = "c36b5b00ab71498b9cf87f6688fccc4d", preview_id = "04cde63167a74ebcb1c3c41136e6a8dc" }
 ]
+
+# The necessary secrets are:
+# - TOKEN
+# - GUILD_ID
+# - APPLICATION_ID
+# - PUBLIC_KEY
+# Run `echo <VALUE> | wrangler secret put <NAME>` for each of these

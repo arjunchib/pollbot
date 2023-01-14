@@ -11,6 +11,7 @@ jobs:
       GUILD_ID: ${{ secrets.GUILD_ID }}
       APPLICATION_ID: ${{ secrets.APPLICATION_ID }}
       TOKEN: ${{ secrets.TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
       - uses: actions/checkout@v3
       - uses: pnpm/action-setup@v2
@@ -23,10 +24,7 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm run update
-      - name: Publish to Cloudflare
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: pnpm run deploy
+      - run: pnpm run deploy
       # - uses: cloudflare/wrangler-action@2.0.0
       #   with:
       #     apiToken: ${{ secrets.CF_API_TOKEN }}
