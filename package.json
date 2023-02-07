@@ -16,9 +16,9 @@
     "update": "ts-node-esm -r dotenv/config scripts/update.ts dotenv_config_path=.dev.vars"
   },
   "dependencies": {
-    "@blurp/cloudflare": "^0.1.0",
-    "@blurp/common": "^0.1.0",
-    "@blurp/node": "^0.1.0",
+    "@blurp/cloudflare": "^0.2.0",
+    "@blurp/common": "^0.2.0",
+    "@blurp/node": "^0.2.0",
     "discord-api-types": "^0.37.28"
   }
 }

@@ -25,6 +25,3 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run update
       - run: pnpm run deploy
-      # - uses: cloudflare/wrangler-action@2.0.0
-      #   with:
-      #     apiToken: ${{ secrets.CF_API_TOKEN }}

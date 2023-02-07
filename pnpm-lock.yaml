@@ -1,9 +1,9 @@
 lockfileVersion: 5.4
 
 specifiers:
-  '@blurp/cloudflare': ^0.1.0
-  '@blurp/common': ^0.1.0
-  '@blurp/node': ^0.1.0
+  '@blurp/cloudflare': ^0.2.0
+  '@blurp/common': ^0.2.0
+  '@blurp/node': ^0.2.0
   '@cloudflare/workers-types': ^4.20221111.1
   '@types/node': ^18.11.18
   discord-api-types: ^0.37.28
@@ -12,9 +12,9 @@ specifiers:
   wrangler: 2.7.1
 
 dependencies:
-  '@blurp/cloudflare': 0.1.0
-  '@blurp/common': 0.1.0
-  '@blurp/node': 0.1.0
+  '@blurp/cloudflare': 0.2.0
+  '@blurp/common': 0.2.0
+  '@blurp/node': 0.2.0
   discord-api-types: 0.37.28
 
 devDependencies:
@@ -26,24 +26,24 @@ devDependencies:
 
 packages:
 
-  /@blurp/cloudflare/0.1.0:
-    resolution: {integrity: sha512-wyInEnslQDuny6x6EmOWt2auB3/mzhDCZ5WdFVVJFibvd1Mf9tBiUga+l81XdN/8F4D4dE6fWEVdaNPJDy6q1A==}
+  /@blurp/cloudflare/0.2.0:
+    resolution: {integrity: sha512-ARFFJ6vQKB3QLhfWRElOQfRjtAdHCOeDntaHsT2VO1fgz/cW/GTL8zNkcuWsEMI1GQj6Ylw2xhml37+vCCelZA==}
     dependencies:
-      '@blurp/common': 0.1.0
+      '@blurp/common': 0.2.0
       discord-api-types: 0.37.28
     dev: false
 
-  /@blurp/common/0.1.0:
-    resolution: {integrity: sha512-GJdbDIJk4uLcAQO52mIed92/Hmo7Jpc9R5RSxzDM2zUAk3KEKDKxMw0ABJgmZCA+DcywY2EbM9f7m6xfVHpw/w==}
+  /@blurp/common/0.2.0:
+    resolution: {integrity: sha512-/5GdPHmV7fILc85800PYYLJfuMUuv+8RKPMhbxBmR+us2cypeWtNtPGp6qN6Q/tNHp4xivqmFrMtWCqUkWRJpg==}
     dependencies:
       discord-api-types: 0.37.28
       tweetnacl: 1.0.3
     dev: false
 
-  /@blurp/node/0.1.0:
-    resolution: {integrity: sha512-dvPWKOAybf6Br6cuzKqa991AelMTrMAuKFHqQ5iwxE/N3je9r9KTj4Qxe5NO6xdTqMqdp3QOk4/qiiLEpCaoig==}
+  /@blurp/node/0.2.0:
+    resolution: {integrity: sha512-BlYXvhEC55pemaRMPtxu0cFdS6KHekIvP8fdkkadySYi2mt9vlGjxGROYQb8R5rkV805dL2sI1MqDpVuoJCL0Q==}
     dependencies:
-      '@blurp/common': 0.1.0
+      '@blurp/common': 0.2.0
     dev: false
 
   /@cloudflare/kv-asset-handler/0.2.0:
