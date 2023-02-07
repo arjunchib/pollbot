@@ -35,6 +35,7 @@ export const command: Command = {
 };
 
 const EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"];
+const EXPIRATION_TTL = 3600 * 24 * 7;
 
 async function handleSlashCommand(interaction: Interaction, env: Env) {
   if (
@@ -126,7 +127,15 @@ async function handleButtonClick(interaction: Interaction, env: Env) {
   if (!pollData) {
     let content = interaction.payload.message.content.split("\n")[0];
     content += "\n*Poll has ended. Voting is no longer allowed.*";
-    return interaction.reply(<UpdateMessage content={content}></UpdateMessage>);
+    const { components } = interaction.payload.message;
+    components?.forEach((row) =>
+      row.components.forEach((b) => {
+        b.disabled = true;
+      })
+    );
+    return interaction.reply(
+      <UpdateMessage content={content}>{components}</UpdateMessage>
+    );
   }
   const poll = new Poll(pollData);
   const index = parseInt(indexStr);
@@ -156,7 +165,7 @@ async function handleButtonClick(interaction: Interaction, env: Env) {
     <UpdateMessage>{interaction.payload.message.components}</UpdateMessage>
   );
   await env.POLL.put(poll.id, JSON.stringify(poll), {
-    expirationTtl: 3600 * 24 * 7,
+    expirationTtl: EXPIRATION_TTL,
   });
 }
 
