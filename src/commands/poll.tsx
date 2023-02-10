@@ -15,8 +15,9 @@ import {
   ChannelMessageWithSource,
   Button,
   UpdateMessage,
+  SelectMenu,
 } from "@blurp/common";
-import { Poll, PollData } from "../models/poll.js";
+import { Poll } from "../models/poll.js";
 import { Env } from "../environment.js";
 
 export const command: Command = {
@@ -24,27 +25,62 @@ export const command: Command = {
   description: "Create a poll",
   options: [
     {
-      name: "options",
-      description: "Number of options between 2 and 5",
-      required: true,
-      type: ApplicationCommandOptionType.Number,
-      min_value: 2,
-      max_value: 5,
+      name: "simple",
+      description: "Poll where you can set the choices",
+      type: ApplicationCommandOptionType.Subcommand,
+      options: [
+        {
+          name: "num_choices",
+          description: "Number of options between 2 and 5",
+          required: true,
+          type: ApplicationCommandOptionType.Number,
+          min_value: 2,
+          max_value: 5,
+        },
+      ],
+    },
+    {
+      name: "user",
+      description: "Poll where the choices are users in the server",
+      type: ApplicationCommandOptionType.Subcommand,
     },
   ],
 };
 
 const EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"];
-const EXPIRATION_TTL = 3600 * 24 * 7;
 
-async function handleSlashCommand(interaction: Interaction, env: Env) {
+async function handleSlashCommand(interaction: Interaction) {
   if (
     interaction.payload.type !== InteractionType.ApplicationCommand ||
     interaction.payload.data.type !== ApplicationCommandType.ChatInput
   )
     return;
-  const numOptionsOption = interaction.payload.data.options?.find(
-    (opt) => opt.name === "options"
+  if (interaction.payload.data.options?.find((opt) => opt.name === "user")) {
+    const poll = Poll.create();
+    const customId = `poll:${poll.id}`;
+    interaction.reply(
+      <ChannelMessageWithSource>
+        <ActionRow>
+          <SelectMenu
+            custom_id={customId}
+            type={ComponentType.UserSelect}
+          ></SelectMenu>
+        </ActionRow>
+      </ChannelMessageWithSource>
+    );
+    await poll.save();
+    return;
+  }
+  const choicesSubcommand = interaction.payload.data.options?.find(
+    (opt) => opt.name === "simple"
+  );
+  if (
+    !choicesSubcommand ||
+    choicesSubcommand.type !== ApplicationCommandOptionType.Subcommand
+  )
+    return;
+  const numOptionsOption = choicesSubcommand.options?.find(
+    (opt) => opt.name === "num_choices"
   );
   const numOptions =
     numOptionsOption?.type === ApplicationCommandOptionType.Number
@@ -80,7 +116,7 @@ async function handleSlashCommand(interaction: Interaction, env: Env) {
   );
 }
 
-async function handleModalSubmit(interaction: Interaction, env: Env) {
+async function handleModalSubmit(interaction: Interaction) {
   if (interaction.payload.type !== InteractionType.ModalSubmit) return;
   const title = interaction.payload.data.components.find((row) =>
     row.components.some((input) => input.custom_id === "poll:title")
@@ -90,7 +126,7 @@ async function handleModalSubmit(interaction: Interaction, env: Env) {
       row.components.some((input) => input.custom_id.startsWith("poll:msg"))
     )
     .map((row) => row.components[0].value);
-  const poll = new Poll();
+  const poll = Poll.create();
   const buttons = options.map((opt, i) => (
     <Button
       emoji={{ name: EMOJIS[i] }}
@@ -111,20 +147,18 @@ async function handleModalSubmit(interaction: Interaction, env: Env) {
       {children}
     </ChannelMessageWithSource>
   );
-  await env.POLL.put(poll.id, JSON.stringify(poll), {
-    expirationTtl: 3600 * 24 * 7,
-  });
+  await poll.save();
 }
 
-async function handleButtonClick(interaction: Interaction, env: Env) {
+async function handleButtonClick(interaction: Interaction) {
   if (
     interaction.payload.type !== InteractionType.MessageComponent ||
     interaction.payload.data.component_type !== ComponentType.Button
   )
     return;
-  const [_, pollId, indexStr] = interaction.payload.data.custom_id.split(":");
-  const pollData = await env.POLL.get<PollData>(pollId, { type: "json" });
-  if (!pollData) {
+  const [_, pollId, choiceKey] = interaction.payload.data.custom_id.split(":");
+  const poll = await Poll.get(pollId);
+  if (!poll) {
     let content = interaction.payload.message.content.split("\n")[0];
     content += "\n*Poll has ended. Voting is no longer allowed.*";
     const { components } = interaction.payload.message;
@@ -137,24 +171,21 @@ async function handleButtonClick(interaction: Interaction, env: Env) {
       <UpdateMessage content={content}>{components}</UpdateMessage>
     );
   }
-  const poll = new Poll(pollData);
-  const index = parseInt(indexStr);
   const user = interaction.payload.member?.user || interaction.payload.user;
-  if (user == null || index == null || index < 0 || index > 4) {
+  if (user == null) {
     let content = interaction.payload.message.content.split("\n")[0];
     content += "\n*Something has gone wrong.*";
     return interaction.reply(<UpdateMessage content={content}></UpdateMessage>);
   }
-  poll.vote(index, user.id);
+  poll.vote(choiceKey, user.id);
   interaction.payload.message.components?.forEach((row) => {
     row.components.forEach((btn) => {
       if (btn.type === ComponentType.Button && btn.style !== ButtonStyle.Link) {
-        const [_, _pollId, iStr] = btn.custom_id.split(":");
-        const i = parseInt(iStr);
+        const [_, _pollId, i] = btn.custom_id.split(":");
         const spaceIdx = btn.label?.endsWith(")")
           ? btn.label?.lastIndexOf(" ")
           : undefined;
-        const voteCount = poll.tally(i);
+        const voteCount = poll.getTotal(i);
         const labelWithoutCount = btn.label?.substring(0, spaceIdx);
         const labelWithCount = `${labelWithoutCount} (${voteCount})`;
         btn.label = voteCount === 0 ? labelWithoutCount : labelWithCount;
@@ -164,13 +195,37 @@ async function handleButtonClick(interaction: Interaction, env: Env) {
   interaction.reply(
     <UpdateMessage>{interaction.payload.message.components}</UpdateMessage>
   );
-  await env.POLL.put(poll.id, JSON.stringify(poll), {
-    expirationTtl: EXPIRATION_TTL,
-  });
+  await poll.save();
+}
+
+async function handleUserSelect(interaction: Interaction) {
+  if (
+    interaction.payload.type !== InteractionType.MessageComponent ||
+    interaction.payload.data.component_type !== ComponentType.UserSelect
+  )
+    return;
+  const [_, pollId] = interaction.payload.data.custom_id.split(":");
+  const poll = await Poll.get<{ name: string }>(pollId);
+  if (!poll) {
+    interaction.reply(<UpdateMessage content="Poll closed!"></UpdateMessage>);
+    return;
+  }
+  const user = interaction.payload.member?.user || interaction.payload.user;
+  if (!user) throw new Error("No user");
+  const choiceKey = interaction.payload.data.values?.[0];
+  const name =
+    interaction.payload.data.resolved.members?.[choiceKey]?.nick ||
+    interaction.payload.data.resolved.users?.[choiceKey]?.username;
+  poll.vote(choiceKey, user?.id, { name });
+  const content = `Current leader: ${poll.getLeader()?.metadata?.name}`;
+  interaction.reply(<UpdateMessage content={content}></UpdateMessage>);
+  await poll.save();
 }
 
 export default async function PollHandler(interaction: Interaction, env: Env) {
-  await handleSlashCommand(interaction, env);
-  await handleModalSubmit(interaction, env);
-  await handleButtonClick(interaction, env);
+  Poll.setNamespace(env.POLL);
+  await handleSlashCommand(interaction);
+  await handleModalSubmit(interaction);
+  await handleButtonClick(interaction);
+  await handleUserSelect(interaction);
 }
