@@ -8,7 +8,6 @@ import {
 } from "discord-api-types/v10";
 import {
   Command,
-  Interaction,
   Modal,
   TextInput,
   ActionRow,
@@ -16,11 +15,13 @@ import {
   Button,
   UpdateMessage,
   SelectMenu,
+  Context,
 } from "@blurp/common";
 import { Poll } from "../models/poll.js";
 import { Env } from "../environment.js";
+import { CloudflareContext } from "@blurp/cloudflare";
 
-export const command: Command = {
+export const command = {
   name: "poll",
   description: "Create a poll",
   options: [
@@ -45,20 +46,24 @@ export const command: Command = {
       type: ApplicationCommandOptionType.Subcommand,
     },
   ],
-};
+} as const satisfies Command;
 
 const EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"];
 
-async function handleSlashCommand(interaction: Interaction) {
+async function handleSlashCommand({
+  interaction,
+  reply,
+  options,
+}: Context<typeof command>) {
   if (
-    interaction.payload.type !== InteractionType.ApplicationCommand ||
-    interaction.payload.data.type !== ApplicationCommandType.ChatInput
+    interaction.type !== InteractionType.ApplicationCommand ||
+    interaction.data.type !== ApplicationCommandType.ChatInput
   )
     return;
-  if (interaction.payload.data.options?.find((opt) => opt.name === "user")) {
+  if (options.pluck("user")) {
     const poll = Poll.create();
     const customId = `poll:${poll.id}`;
-    interaction.reply(
+    reply(
       <ChannelMessageWithSource>
         <ActionRow>
           <SelectMenu
@@ -71,21 +76,7 @@ async function handleSlashCommand(interaction: Interaction) {
     await poll.save();
     return;
   }
-  const choicesSubcommand = interaction.payload.data.options?.find(
-    (opt) => opt.name === "simple"
-  );
-  if (
-    !choicesSubcommand ||
-    choicesSubcommand.type !== ApplicationCommandOptionType.Subcommand
-  )
-    return;
-  const numOptionsOption = choicesSubcommand.options?.find(
-    (opt) => opt.name === "num_choices"
-  );
-  const numOptions =
-    numOptionsOption?.type === ApplicationCommandOptionType.Number
-      ? numOptionsOption.value
-      : 2;
+  const numOptions = options.pluck("simple", "num_choices")?.value ?? 2;
   const children = [];
   for (let i = 1; i <= numOptions; i++) {
     children.push(
@@ -109,19 +100,22 @@ async function handleSlashCommand(interaction: Interaction) {
       ></TextInput>
     </ActionRow>
   );
-  interaction.reply(
+  reply(
     <Modal custom_id="poll:modal" title="New Poll">
       {children}
     </Modal>
   );
 }
 
-async function handleModalSubmit(interaction: Interaction) {
-  if (interaction.payload.type !== InteractionType.ModalSubmit) return;
-  const title = interaction.payload.data.components.find((row) =>
+async function handleModalSubmit({
+  interaction,
+  reply,
+}: Context<typeof command>) {
+  if (interaction.type !== InteractionType.ModalSubmit) return;
+  const title = interaction.data.components.find((row) =>
     row.components.some((input) => input.custom_id === "poll:title")
   )?.components[0].value;
-  const options = interaction.payload.data.components
+  const options = interaction.data.components
     .filter((row) =>
       row.components.some((input) => input.custom_id.startsWith("poll:msg"))
     )
@@ -142,7 +136,7 @@ async function handleModalSubmit(interaction: Interaction) {
   ) : (
     <ActionRow>{buttons}</ActionRow>
   );
-  interaction.reply(
+  reply(
     <ChannelMessageWithSource content={title}>
       {children}
     </ChannelMessageWithSource>
@@ -150,35 +144,36 @@ async function handleModalSubmit(interaction: Interaction) {
   await poll.save();
 }
 
-async function handleButtonClick(interaction: Interaction) {
+async function handleButtonClick({
+  interaction,
+  reply,
+}: Context<typeof command>) {
   if (
-    interaction.payload.type !== InteractionType.MessageComponent ||
-    interaction.payload.data.component_type !== ComponentType.Button
+    interaction.type !== InteractionType.MessageComponent ||
+    interaction.data.component_type !== ComponentType.Button
   )
     return;
-  const [_, pollId, choiceKey] = interaction.payload.data.custom_id.split(":");
+  const [_, pollId, choiceKey] = interaction.data.custom_id.split(":");
   const poll = await Poll.get(pollId);
   if (!poll) {
-    let content = interaction.payload.message.content.split("\n")[0];
+    let content = interaction.message.content.split("\n")[0];
     content += "\n*Poll has ended. Voting is no longer allowed.*";
-    const { components } = interaction.payload.message;
+    const { components } = interaction.message;
     components?.forEach((row) =>
       row.components.forEach((b) => {
         b.disabled = true;
       })
     );
-    return interaction.reply(
-      <UpdateMessage content={content}>{components}</UpdateMessage>
-    );
+    return reply(<UpdateMessage content={content}>{components}</UpdateMessage>);
   }
-  const user = interaction.payload.member?.user || interaction.payload.user;
+  const user = interaction.member?.user || interaction.user;
   if (user == null) {
-    let content = interaction.payload.message.content.split("\n")[0];
+    let content = interaction.message.content.split("\n")[0];
     content += "\n*Something has gone wrong.*";
-    return interaction.reply(<UpdateMessage content={content}></UpdateMessage>);
+    return reply(<UpdateMessage content={content}></UpdateMessage>);
   }
   poll.vote(choiceKey, user.id);
-  interaction.payload.message.components?.forEach((row) => {
+  interaction.message.components?.forEach((row) => {
     row.components.forEach((btn) => {
       if (btn.type === ComponentType.Button && btn.style !== ButtonStyle.Link) {
         const [_, _pollId, i] = btn.custom_id.split(":");
@@ -192,38 +187,39 @@ async function handleButtonClick(interaction: Interaction) {
       }
     });
   });
-  interaction.reply(
-    <UpdateMessage>{interaction.payload.message.components}</UpdateMessage>
-  );
+  reply(<UpdateMessage>{interaction.message.components}</UpdateMessage>);
   await poll.save();
 }
 
-async function handleUserSelect(interaction: Interaction) {
+async function handleUserSelect({
+  interaction,
+  reply,
+}: Context<typeof command>) {
   if (
-    interaction.payload.type !== InteractionType.MessageComponent ||
-    interaction.payload.data.component_type !== ComponentType.UserSelect
+    interaction.type !== InteractionType.MessageComponent ||
+    interaction.data.component_type !== ComponentType.UserSelect
   )
     return;
-  const [_, pollId] = interaction.payload.data.custom_id.split(":");
+  const [_, pollId] = interaction.data.custom_id.split(":");
   const poll = await Poll.get<{ name: string }>(pollId);
   if (!poll) {
-    interaction.reply(<UpdateMessage content="Poll closed!"></UpdateMessage>);
+    reply(<UpdateMessage content="Poll closed!"></UpdateMessage>);
     return;
   }
-  const user = interaction.payload.member?.user || interaction.payload.user;
+  const user = interaction.member?.user || interaction.user;
   if (!user) throw new Error("No user");
-  const choiceKey = interaction.payload.data.values?.[0];
+  const choiceKey = interaction.data.values?.[0];
   const name =
-    interaction.payload.data.resolved.members?.[choiceKey]?.nick ||
-    interaction.payload.data.resolved.users?.[choiceKey]?.username;
+    interaction.data.resolved.members?.[choiceKey]?.nick ||
+    interaction.data.resolved.users?.[choiceKey]?.username;
   poll.vote(choiceKey, user?.id, { name });
   const content = `Current leader: ${poll.getLeader()?.metadata?.name}`;
-  interaction.reply(<UpdateMessage content={content}></UpdateMessage>);
+  reply(<UpdateMessage content={content}></UpdateMessage>);
   await poll.save();
 }
 
-export default async function PollHandler(interaction: Interaction, env: Env) {
-  Poll.setNamespace(env.POLL);
+export default async function PollHandler(interaction: CloudflareContext<Env>) {
+  Poll.setNamespace(interaction.environment.POLL);
   await handleSlashCommand(interaction);
   await handleModalSubmit(interaction);
   await handleButtonClick(interaction);
